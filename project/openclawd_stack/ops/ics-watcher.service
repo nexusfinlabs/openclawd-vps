@@ -1,0 +1,16 @@
+[Unit]
+Description=ICS Email Watcher — auto-add calendar events from email
+After=network.target openclaw-gateway.service
+
+[Service]
+Type=simple
+User=albi_agent
+WorkingDirectory=/home/albi_agent/openclawd_stack
+ExecStart=/usr/bin/python3 ops/ics_watcher.py
+Restart=always
+RestartSec=30
+Environment=PATH=/home/albi_agent/.nvm/versions/node/v22.22.0/bin:/usr/local/bin:/usr/bin:/bin
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/home/albi_agent/.secrets/google/credentials.json
+
+[Install]
+WantedBy=multi-user.target
