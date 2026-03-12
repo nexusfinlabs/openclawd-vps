@@ -2,12 +2,11 @@
 """
 Command Router — Local VPS command executor for OpenClaw.
 
-Tails the OpenClaw gateway log file, detects incoming WhatsApp messages
-starting with '!', and executes the corresponding bash scripts via subprocess.
-Scripts handle their own response delivery via 'openclaw message send'.
+Tails the OpenClaw gateway log file, detects incoming WhatsApp AND Telegram
+messages starting with '!', and executes the corresponding bash scripts.
 
 Architecture:
-  WhatsApp → Gateway → log file → THIS ROUTER → subprocess → scripts → openclaw message send
+  WhatsApp/Telegram → Gateway → log file → THIS ROUTER → scripts → openclaw message send
 
 No HTTP server. No cloud agent. No approvals. 100% local.
 """
@@ -25,7 +24,7 @@ from datetime import datetime, timezone
 SKILLS_DIR = "/home/albi_agent/openclawd_stack/ops/openclaw_skills"
 WORK_DIR = "/home/albi_agent/openclawd_stack"
 LOG_DIR = "/tmp/openclaw"
-ALLOWED_NUMBERS = {"+34605693177"}
+ALLOWED_SENDERS = {"+34605693177", "7024795874"}  # WhatsApp + Telegram
 SUBPROCESS_TIMEOUT = 120  # seconds
 
 # ── Logging ─────────────────────────────────────────────
@@ -66,16 +65,16 @@ def _get_log_path():
     return os.path.join(LOG_DIR, f"openclaw-{today}.log")
 
 
-def _send_whatsapp(message):
-    """Send a message back via openclaw CLI."""
+def _send_reply(message, channel="whatsapp", target="34605693177"):
+    """Send a message back via openclaw CLI on the given channel."""
     try:
         env = os.environ.copy()
         env["PATH"] = f"/home/albi_agent/.nvm/versions/node/v22.22.0/bin:{env.get('PATH', '')}"
         subprocess.run(
             [
                 "openclaw", "message", "send",
-                "--channel", "whatsapp",
-                "--target", "34605693177",
+                "--channel", channel,
+                "--target", target,
                 "--message", message,
             ],
             timeout=30,
@@ -83,38 +82,56 @@ def _send_whatsapp(message):
             capture_output=True,
         )
     except Exception as e:
-        log.error("Failed to send WhatsApp message: %s", e)
+        log.error("Failed to send %s message: %s", channel, e)
 
 
 def _parse_inbound_message(line):
     """
-    Parse a gateway log line and extract inbound WhatsApp message data.
+    Parse a gateway log line and extract inbound message data.
+    Supports both WhatsApp and Telegram inbound formats.
 
-    Returns (sender, body, timestamp) or None if not an inbound message.
+    Returns (sender, body, timestamp, channel) or None.
     """
     try:
         data = json.loads(line)
     except (json.JSONDecodeError, TypeError):
         return None
 
-    # Match the specific log pattern: module=web-inbound, field "2"="inbound message"
-    if data.get("2") != "inbound message":
-        return None
+    # --- WhatsApp inbound: module=web-inbound, field "2"="inbound message" ---
+    if data.get("2") == "inbound message":
+        module_str = data.get("0", "")
+        payload = data.get("1", {})
+        if isinstance(payload, dict) and payload.get("body"):
+            sender = payload.get("from", "")
+            body = payload.get("body", "")
+            timestamp = payload.get("timestamp", 0)
+            if sender and body:
+                return (sender, body, timestamp, "whatsapp")
 
-    module_str = data.get("0", "")
-    if "web-inbound" not in module_str:
-        return None
+    # --- Telegram inbound: subsystem contains "telegram", "1" contains message text ---
+    subsystem = data.get("0", "")
+    if "telegram" in subsystem and "inbound" in subsystem:
+        payload = data.get("1", {})
+        if isinstance(payload, dict) and payload.get("body"):
+            sender = str(payload.get("from", ""))
+            body = payload.get("body", "")
+            timestamp = payload.get("timestamp", 0)
+            if sender and body:
+                return (sender, body, timestamp, "telegram")
 
-    payload = data.get("1", {})
-    if not isinstance(payload, dict):
-        return None
-
-    sender = payload.get("from", "")
-    body = payload.get("body", "")
-    timestamp = payload.get("timestamp", 0)
-
-    if sender and body:
-        return (sender, body, timestamp)
+    # --- Fallback: try to detect any inbound message with body field ---
+    if data.get("2") == "inbound message":
+        payload = data.get("1", {})
+        if isinstance(payload, dict) and payload.get("body"):
+            sender = str(payload.get("from", ""))
+            body = payload.get("body", "")
+            timestamp = payload.get("timestamp", 0)
+            # Detect channel from subsystem
+            chan = "whatsapp"
+            if "telegram" in data.get("0", ""):
+                chan = "telegram"
+            if sender and body:
+                return (sender, body, timestamp, chan)
 
     return None
 
@@ -163,15 +180,16 @@ def _handle_help():
     return "\n".join(lines)
 
 
-def _execute_command(body):
+def _execute_command(body, channel="whatsapp", target="34605693177"):
     """
     Parse the command from the message body and execute the corresponding script.
+    Replies on the same channel the message came from.
     """
     body_stripped = body.strip()
 
     # Handle !help separately (no script needed)
     if body_stripped == "!help":
-        _send_whatsapp(_handle_help())
+        _send_reply(_handle_help(), channel=channel, target=target)
         return
 
     # Find matching command
@@ -183,7 +201,7 @@ def _execute_command(body):
 
     if not matched_cmd:
         log.warning("Unknown command: %s", body_stripped[:80])
-        _send_whatsapp(f"❌ Comando desconocido: `{body_stripped[:50]}`\nEnvía `!help` para ver comandos.")
+        _send_reply(f"❌ Comando desconocido: `{body_stripped[:50]}`\nEnvía `!help` para ver comandos.", channel=channel, target=target)
         return
 
     script_name, min_args = COMMANDS[matched_cmd]
@@ -191,7 +209,7 @@ def _execute_command(body):
 
     if not os.path.isfile(script_path):
         log.error("Script not found: %s", script_path)
-        _send_whatsapp(f"❌ Script no encontrado: {script_name}")
+        _send_reply(f"❌ Script no encontrado: {script_name}", channel=channel, target=target)
         return
 
     # Extract arguments (everything after the command prefix)
@@ -211,7 +229,7 @@ def _execute_command(body):
     log.info("EXEC: %s %s (args: %s)", script_name, args, len(args))
 
     # Send acknowledgement
-    _send_whatsapp(f"⚡ Ejecutando `{matched_cmd}` ...")
+    _send_reply(f"⚡ Ejecutando `{matched_cmd}` ...", channel=channel, target=target)
 
     # Execute the script
     cmd = ["bash", script_path] + args
@@ -232,11 +250,11 @@ def _execute_command(body):
 
     except subprocess.TimeoutExpired:
         log.error("Script %s timed out after %ds", script_name, SUBPROCESS_TIMEOUT)
-        _send_whatsapp(f"⏱️ Timeout: `{matched_cmd}` tardó más de {SUBPROCESS_TIMEOUT}s.")
+        _send_reply(f"⏱️ Timeout: `{matched_cmd}` tardó más de {SUBPROCESS_TIMEOUT}s.", channel=channel, target=target)
 
     except Exception as e:
         log.error("Error executing %s: %s", script_name, e)
-        _send_whatsapp(f"❌ Error ejecutando `{matched_cmd}`: {str(e)[:200]}")
+        _send_reply(f"❌ Error ejecutando `{matched_cmd}`: {str(e)[:200]}", channel=channel, target=target)
 
 
 def tail_log():
@@ -247,8 +265,9 @@ def tail_log():
     log.info("=" * 60)
     log.info("Command Router started")
     log.info("Skills dir: %s", SKILLS_DIR)
-    log.info("Allowed numbers: %s", ALLOWED_NUMBERS)
+    log.info("Allowed senders: %s", ALLOWED_SENDERS)
     log.info("Commands: %s", list(COMMANDS.keys()))
+    log.info("Channels: WhatsApp + Telegram (unified)")
     log.info("=" * 60)
 
     current_log_path = None
@@ -287,7 +306,7 @@ def tail_log():
             if not parsed:
                 continue
 
-            sender, body, timestamp = parsed
+            sender, body, timestamp, channel = parsed
 
             # Duplicate check
             msg_id = f"{timestamp}:{body[:50]}"
@@ -299,17 +318,27 @@ def tail_log():
             if len(_processed_timestamps) > MAX_PROCESSED_CACHE:
                 _processed_timestamps.clear()
 
-            # Whitelist check
-            if sender not in ALLOWED_NUMBERS:
-                log.warning("BLOCKED sender: %s", sender)
+            # Whitelist check — normalize sender for matching
+            sender_clean = sender.replace("@s.whatsapp.net", "").lstrip("+")
+            sender_match = any(
+                s.lstrip("+") == sender_clean or s == sender
+                for s in ALLOWED_SENDERS
+            )
+            if not sender_match:
+                log.warning("BLOCKED sender: %s (channel: %s)", sender, channel)
                 continue
 
             # Only process ! commands
             if not body.startswith("!"):
                 continue
 
-            log.info("CMD from %s: %s", sender[-4:], body[:100])
-            _execute_command(body)
+            # Determine reply target based on channel
+            target = sender_clean
+            if channel == "whatsapp":
+                target = sender_clean.replace("@s.whatsapp.net", "")
+
+            log.info("CMD [%s] from %s: %s", channel, sender[-8:], body[:100])
+            _execute_command(body, channel=channel, target=target)
 
         except KeyboardInterrupt:
             log.info("Shutting down...")
