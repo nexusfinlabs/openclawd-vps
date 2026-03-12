@@ -1,0 +1,61 @@
+# ── Secrets & Environment ──
+.env
+.env.*
+!.env.example
+vault/
+credentials.json
+*.json.bak
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+venv/
+
+# ── State / Runtime (crawler) ──
+state/
+*.lock
+*.log
+
+# ── Generated docs (output, not templates) ──
+docs/drafts/
+docs/enviados/
+
+# ── Docker volumes ──
+data/
+postgres_data/
+
+# ── Celery PID files ──
+celery@*
+
+# ── Old approval system (dead code) ──
+approval-daemon*.py
+approvals_open.json
+exec-approvals-golden.json
+fix-approvals.sh
+PATH_DEL_WORKER_PY
+
+# ── Test / scratch files ──
+test_serp*.py
+smtp_test.py
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# ── IDE ──
+.idea/
+.vscode/
+
+# ── Node ──
+node_modules/
+
+# ── Build artifacts ──
+*.deb
+*.tar.gz
+*.qpkg

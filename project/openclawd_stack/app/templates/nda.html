@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="header-block">
+    <h1>ACUERDO DE CONFIDENCIALIDAD (NDA)</h1>
+    <div class="meta-data">
+        <table>
+            <tr><td class="meta-label">Referencia:</td><td>{{ ref }}</td></tr>
+            <tr><td class="meta-label">Fecha:</td><td>{{ fecha }}</td></tr>
+            <tr><td class="meta-label">Vigencia:</td><td>{{ vigencia | default("2 años desde la firma") }}</td></tr>
+        </table>
+    </div>
+</div>
+
+<h2>PARTES</h2>
+
+<p><strong>PARTE REVELADORA ("Disclosing Party"):</strong><br>
+{{ parte_reveladora | default("Nexus FinLabs S.L.") }}<br>
+{{ direccion_reveladora | default("Madrid, España") }}</p>
+
+<p><strong>PARTE RECEPTORA ("Receiving Party"):</strong><br>
+{{ parte_receptora }}<br>
+{{ direccion_receptora | default("") }}</p>
+
+<h2>1. DEFINICIÓN DE INFORMACIÓN CONFIDENCIAL</h2>
+<p>A los efectos del presente Acuerdo, se considerará "Información Confidencial" toda información facilitada por la Parte Reveladora a la Parte Receptora, ya sea de forma oral, escrita, electrónica o por cualquier otro medio, que se refiera a:</p>
+<ul>
+    <li>Estrategias comerciales, planes de negocio y modelos financieros</li>
+    <li>Información técnica, know-how, algoritmos y propiedad intelectual</li>
+    <li>Datos de clientes, proveedores y socios comerciales</li>
+    <li>Términos comerciales, precios y condiciones de contratos</li>
+    <li>{{ info_adicional | default("Cualquier otra información marcada como confidencial") }}</li>
+</ul>
+
+<h2>2. OBLIGACIONES DE CONFIDENCIALIDAD</h2>
+<p>La Parte Receptora se compromete a:</p>
+<ul>
+    <li>Mantener la confidencialidad de toda la Información Confidencial recibida</li>
+    <li>No divulgar, publicar ni revelar dicha información a terceros sin el consentimiento previo y por escrito de la Parte Reveladora</li>
+    <li>Utilizar la Información Confidencial únicamente para el propósito de {{ proposito | default("evaluar una potencial relación comercial entre las partes") }}</li>
+    <li>Proteger la Información Confidencial con el mismo grado de cuidado que aplicaría a su propia información confidencial, y en ningún caso con un estándar inferior al razonable</li>
+</ul>
+
+<h2>3. EXCLUSIONES</h2>
+<p>No se considerará Información Confidencial aquella que:</p>
+<ul>
+    <li>Sea o se convierta en información de dominio público sin incumplimiento de este Acuerdo</li>
+    <li>La Parte Receptora ya poseyera antes de recibirla de la Parte Reveladora</li>
+    <li>Sea obtenida legítimamente de un tercero sin restricciones de confidencialidad</li>
+    <li>Sea desarrollada independientemente por la Parte Receptora sin uso de la Información Confidencial</li>
+</ul>
+
+<h2>4. DURACIÓN</h2>
+<p>Este Acuerdo entrará en vigor en la fecha de su firma y las obligaciones de confidencialidad se mantendrán vigentes durante un período de {{ vigencia | default("2 años") }} contado desde dicha fecha.</p>
+
+<h2>5. DEVOLUCIÓN DE INFORMACIÓN</h2>
+<p>A la terminación de este Acuerdo o a requerimiento de la Parte Reveladora, la Parte Receptora devolverá o destruirá toda la Información Confidencial recibida, incluyendo cualquier copia o reproducción.</p>
+
+<h2>6. LEGISLACIÓN APLICABLE</h2>
+<p>Este Acuerdo se regirá e interpretará conforme a la legislación de {{ jurisdiccion | default("España") }}. Cualquier controversia derivada del mismo será sometida a los tribunales de {{ ciudad_jurisdiccion | default("Madrid") }}.</p>
+
+<div class="signatures">
+    <table>
+        <tr>
+            <td class="signature-box">
+                <p class="signature-title">PARTE REVELADORA</p>
+                <p>{{ parte_reveladora | default("Nexus FinLabs S.L.") }}</p>
+                <p>Nombre: _________________________</p>
+                <p>Cargo: _________________________</p>
+                <p>Fecha: _________________________</p>
+            </td>
+            <td style="width: 10%;">&nbsp;</td>
+            <td class="signature-box">
+                <p class="signature-title">PARTE RECEPTORA</p>
+                <p>{{ parte_receptora }}</p>
+                <p>Nombre: _________________________</p>
+                <p>Cargo: _________________________</p>
+                <p>Fecha: _________________________</p>
+            </td>
+        </tr>
+    </table>
+</div>
+{% endblock %}

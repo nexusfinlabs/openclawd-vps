@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: oc_postgres
+    environment:
+      POSTGRES_DB: openclawd
+      POSTGRES_USER: openclawd
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - oc_pgdata:/var/lib/postgresql/data
+    networks: [ ocnet ]
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U openclawd -d openclawd" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: oc_redis
+    networks: [ ocnet ]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: oc_api
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - /home/albi_agent/.openclaw/workspace/docs:/docs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks: [ ocnet ]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: oc_worker
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    command: [ "python", "worker.py" ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [ ocnet ]
+    restart: unless-stopped
+
+  exporter:
+    build:
+      context: ./exporter
+      dockerfile: Dockerfile
+    container_name: oc_exporter
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/google/credentials.json
+    volumes:
+      - /home/albi_agent/.secrets/google:/secrets/google:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    networks: [ ocnet ]
+    restart: unless-stopped
+
+  control:
+    build:
+      context: ./control
+      dockerfile: Dockerfile
+    container_name: oc_control
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/google/credentials.json
+    volumes:
+      - /home/albi_agent/.secrets/google:/secrets/google:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    networks: [ ocnet ]
+    restart: unless-stopped
+
+volumes:
+  oc_pgdata:
+
+
+networks:
+  ocnet:
+    driver: bridge

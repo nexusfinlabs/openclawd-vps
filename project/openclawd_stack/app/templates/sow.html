@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="header-block">
+    <h1>STATEMENT OF WORK (SOW)</h1>
+    <div class="meta-data">
+        <table>
+            <tr><td class="meta-label">Referencia:</td><td>{{ ref }}</td></tr>
+            <tr><td class="meta-label">Fecha:</td><td>{{ fecha }}</td></tr>
+            <tr><td class="meta-label">Cliente:</td><td>{{ cliente }}</td></tr>
+            <tr><td class="meta-label">Proveedor:</td><td>{{ proveedor | default("Nexus FinLabs / iAgrowth") }}</td></tr>
+        </table>
+    </div>
+</div>
+
+<h2>1. ANTECEDENTES</h2>
+<p>{{ antecedentes | default("El Cliente ha solicitado los servicios del Proveedor para la ejecución del proyecto descrito a continuación.") }}</p>
+
+<h2>2. ALCANCE DEL TRABAJO</h2>
+<p>{{ alcance_resumen }}</p>
+
+{% if entregables %}
+<h2>3. ENTREGABLES</h2>
+<table class="data-table">
+    <tr>
+        <th>#</th>
+        <th>Entregable</th>
+        <th>Descripción</th>
+        <th>Plazo</th>
+    </tr>
+    {% for e in entregables %}
+    <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ e.nombre }}</td>
+        <td>{{ e.descripcion }}</td>
+        <td>{{ e.plazo }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+{% if fases %}
+<h2>3. FASES DEL PROYECTO</h2>
+{% for fase in fases %}
+<h3>Fase {{ loop.index }}: {{ fase.nombre }}</h3>
+<p>{{ fase.descripcion }}</p>
+<p><strong>Duración estimada:</strong> {{ fase.duracion }}</p>
+{% if fase.entregables %}
+<ul>
+{% for e in fase.entregables %}
+    <li>{{ e }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endfor %}
+{% endif %}
+
+<h2>4. CRONOGRAMA</h2>
+<table class="data-table">
+    <tr>
+        <th>Hito</th>
+        <th>Fecha Estimada</th>
+    </tr>
+    <tr><td>Inicio del proyecto</td><td>{{ fecha_inicio | default("A convenir tras firma") }}</td></tr>
+    <tr><td>Duración total</td><td>{{ duracion | default("A definir") }}</td></tr>
+    <tr><td>Revisión intermedia</td><td>{{ revision_intermedia | default("Mitad del proyecto") }}</td></tr>
+    <tr><td>Entrega final</td><td>{{ fecha_fin | default("Al finalizar la duración pactada") }}</td></tr>
+</table>
+
+<h2>5. INVERSIÓN</h2>
+<table class="data-table">
+    <tr>
+        <th>Concepto</th>
+        <th>Importe</th>
+    </tr>
+    <tr><td>Fee del proyecto</td><td>{{ fee | default("A convenir") }}</td></tr>
+    <tr><td>Condiciones de pago</td><td>{{ condiciones_pago | default("50% al inicio, 50% a la entrega final") }}</td></tr>
+</table>
+<p><em>Importes en {{ moneda | default("EUR") }}, {{ impuestos | default("IVA no incluido") }}.</em></p>
+
+<h2>6. EQUIPO</h2>
+<p><strong>Responsable del proyecto (Proveedor):</strong> {{ responsable_proveedor | default("Alberto Lebrón — Tech Advisor") }}</p>
+<p><strong>Contacto del Cliente:</strong> {{ contacto_cliente | default("A designar") }}</p>
+
+<h2>7. TÉRMINOS GENERALES</h2>
+<ul>
+    <li>El presente SOW está sujeto a los términos del contrato marco entre las partes, si existiera</li>
+    <li>Cualquier cambio en el alcance requerirá un addendum firmado por ambas partes</li>
+    <li>La propiedad intelectual de los entregables se transferirá al Cliente tras el pago completo</li>
+    <li>Ambas partes se comprometen a mantener la confidencialidad de la información intercambiada</li>
+</ul>
+
+<div class="signatures">
+    <table>
+        <tr>
+            <td class="signature-box">
+                <p class="signature-title">PROVEEDOR</p>
+                <p>{{ proveedor | default("Nexus FinLabs / iAgrowth") }}</p>
+                <p>Nombre: _________________________</p>
+                <p>Cargo: _________________________</p>
+                <p>Fecha: _________________________</p>
+            </td>
+            <td style="width: 10%;">&nbsp;</td>
+            <td class="signature-box">
+                <p class="signature-title">CLIENTE</p>
+                <p>{{ cliente }}</p>
+                <p>Nombre: _________________________</p>
+                <p>Cargo: _________________________</p>
+                <p>Fecha: _________________________</p>
+            </td>
+        </tr>
+    </table>
+</div>
+{% endblock %}

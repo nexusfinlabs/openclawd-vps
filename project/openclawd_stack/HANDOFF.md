@@ -34,10 +34,6 @@
 | 2026-03-10 | [V5] System prompt hardened: explicit prohibition against privacy refusals, Pandoc, ZIP, external services | Antigravity |
 | 2026-03-10 | [V5] Folder structure: `drafts/`, `plantillas/`, `revision/`, `enviados/` on VPS + local | Antigravity |
 | 2026-03-10 | [V5] ARCHITECTURE.md created: full stack architecture doc with 6 data flows + scaling guide | Antigravity |
-| 2026-03-10 | [V5] Added HUNTER_API_KEY + ZEROBOUNCE_API_KEY to VPS + local .env. Full email waterfall operational | Antigravity |
-| 2026-03-10 | [V5] Improved SerpAPI: AI Overview, Knowledge Graph parsing + multi-query. Permutation engine: 7 patterns + ZeroBounce validation | Antigravity |
-| 2026-03-10 | [V5] New skill: `linkedin-sheets.sh` — reads companies from Sheet tab, searches LinkedIn via SerpAPI, writes URLs back to Sheet | Antigravity |
-| 2026-03-12 | [V6] Command Router: local Python service replacing cloud agent approvals. Log tailing, subprocess execution, systemd service | Antigravity |
 
 ---
 
@@ -98,7 +94,6 @@ Automated outreach platform running on a VPS:
 | Service | Binary | Ports | Purpose |
 |---------|--------|-------|---------|
 | `openclaw-gateway` | `openclaw gateway` | `18789` (UI+WS), `18791` (browser API) | OpenClaw AI agent + WhatsApp channel |
-| `command-router` | `python3 ops/command_router.py` | — (log tailer) | Local `!` command executor (no cloud agent) |
 | `cockpit` | `systemctl` | `9090` | Ubuntu Server web GUI + File browser |
 
 Status check:
@@ -346,61 +341,6 @@ sleep 3 && openclaw channels login --channel whatsapp --verbose"
 |--------|------|-------|
 | +34663103334 | Agent (WhatsApp Business) | Linked to OpenClaw, sends/receives as the bot |
 | +34605693177 | Owner (WhatsApp Personal) | Approved sender, interacts with agent |
-
-### 5.7 Command Router (Local `!` Command Executor)
-
-**Not a Docker container** — runs natively on VPS as a systemd service.
-Replaces the cloud agent approval system for deterministic command execution.
-
-| Field | Value |
-|-------|-------|
-| Script | `ops/command_router.py` |
-| Systemd | `command-router.service` |
-| Log file | `/tmp/command_router.log` |
-| Mechanism | Tails gateway log, parses `web-inbound` JSON messages |
-| Dependencies | None (stdlib only) |
-
-**Architecture:**
-```
-WhatsApp → Gateway → log file → command_router.py → subprocess → scripts → openclaw message send
-```
-
-**Command Map:**
-
-| Command | Script | Example |
-|---------|--------|---------|
-| `!make-proposal` | `make-proposal.sh` | `!make-proposal john@co.com AI strategy` |
-| `!send-proposal` | `send-proposal.sh` | `!send-proposal john@co.com` |
-| `!busca-email` | `enrich-email.sh` | `!busca-email Juan Perez acme.com` |
-| `!busca-linkedin` | `linkedin-sheets.sh` | `!busca-linkedin vc_payments 4 10` |
-| `!admin` | `admin-ops.sh` | `!admin status` / `!admin fix-all` |
-| `!generate-doc` | `generate-doc.sh` | `!generate-doc SOW "content..."` |
-| `!draft-email` | `draft-email.sh` | `!draft-email "Acme" target@acme.com` |
-| `!calendar-status` | `calendar-status.sh` | `!calendar-status meeting` |
-| `!calendar-create` | `calendar-create-event.sh` | `!calendar-create "Call" "2026-03-15T16:00Z" "a@b.com"` |
-| `!calendar-from-email` | `calendar-from-email.sh` | `!calendar-from-email "speaker name"` |
-| `!calendar-upload` | `calendar-upload-ics.sh` | `!calendar-upload /tmp/event.ics` |
-| `!help` | (built-in) | Shows all available commands |
-
-**Email Enrichment Waterfall** (`!busca-email`):
-```
-1. Hunter.io (API)
-2. Snov.io (API)
-3. Web Scraping (mailto: links on company pages)
-4. SerpAPI Google Search (AI Overview, Knowledge Graph, organic results)
-5. Smart Permutation Engine (first.last@, flast@, etc.) + ZeroBounce validation
-```
-
-**Calendar from Email** (`!calendar-from-email`):
-Searches IMAP inboxes (Gmail + IONOS) for emails matching the query,
-extracts `.ics` attachments, and adds them to Google Calendar automatically.
-
-**Service management:**
-```bash
-sudo systemctl status command-router
-sudo systemctl restart command-router
-cat /tmp/command_router.log
-```
 
 ---
 

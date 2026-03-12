@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Secrets
+.secrets/
+credentials.json
+
+# Docker volumes
+data/
+postgres_data/
+
+# Logs
+*.log
+/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# Generated docs (output, not source)
+docs/drafts/
+docs/enviados/
+
+# Celery PID files
+celery@*
+
+# Old approval system
+approval-daemon*.py
+approvals_open.json
+exec-approvals-golden.json
+
+# Test files
+test_serp*.py
+
+# Build artifacts
+*.deb
+*.tar.gz
+ops/openclaw_vps.json

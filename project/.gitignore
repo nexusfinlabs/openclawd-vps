@@ -1,0 +1,19 @@
+# secrets
+.env
+*.env
+vault/
+**/vault/
+credentials*.json
+*.pem
+*.key
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# node
+node_modules/
+
+# misc
+.DS_Store

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="header-block">
+    <h1>PROPUESTA COMERCIAL</h1>
+    <div class="meta-data">
+        <table>
+            <tr><td class="meta-label">Referencia:</td><td>{{ ref }}</td></tr>
+            <tr><td class="meta-label">Fecha:</td><td>{{ fecha }}</td></tr>
+            <tr><td class="meta-label">Preparado para:</td><td>{{ empresa_destino }}</td></tr>
+            <tr><td class="meta-label">Preparado por:</td><td>{{ preparado_por | default("Alberto Lebrón — Nexus FinLabs") }}</td></tr>
+            <tr><td class="meta-label">Validez:</td><td>{{ validez | default("30 días naturales desde la fecha de emisión") }}</td></tr>
+        </table>
+    </div>
+</div>
+
+<h2>1. RESUMEN EJECUTIVO</h2>
+<p>{{ resumen_ejecutivo }}</p>
+
+<h2>2. CONTEXTO Y OPORTUNIDAD</h2>
+<p>{{ contexto }}</p>
+
+<h2>3. SOLUCIÓN PROPUESTA</h2>
+<p>{{ solucion }}</p>
+
+{% if servicios %}
+<h3>Servicios Incluidos</h3>
+<ul>
+{% for s in servicios %}
+    <li><strong>{{ s.nombre }}:</strong> {{ s.descripcion }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<h2>4. VALOR AÑADIDO</h2>
+{% if valor_items %}
+<ul>
+{% for v in valor_items %}
+    <li>{{ v }}</li>
+{% endfor %}
+</ul>
+{% else %}
+<p>{{ valor_anadido }}</p>
+{% endif %}
+
+<h2>5. INVERSIÓN</h2>
+<table class="data-table">
+    <tr>
+        <th>Concepto</th>
+        <th>Importe</th>
+    </tr>
+    {% if lineas_precio %}
+    {% for l in lineas_precio %}
+    <tr><td>{{ l.concepto }}</td><td>{{ l.importe }}</td></tr>
+    {% endfor %}
+    {% else %}
+    <tr><td>Fee del proyecto</td><td>{{ fee | default("A convenir") }}</td></tr>
+    {% endif %}
+</table>
+<p><em>{{ nota_precio | default("Importes en EUR, IVA no incluido. Condiciones de pago a convenir.") }}</em></p>
+
+<h2>6. PRÓXIMOS PASOS</h2>
+{% if pasos %}
+<ol>
+{% for p in pasos %}
+    <li>{{ p }}</li>
+{% endfor %}
+</ol>
+{% else %}
+<ol>
+    <li>Revisión de esta propuesta</li>
+    <li>Call de alineación (30 min)</li>
+    <li>Firma de NDA + SOW</li>
+    <li>Kick-off del proyecto</li>
+</ol>
+{% endif %}
+
+<h2>7. SOBRE NOSOTROS</h2>
+<p>{{ sobre_nosotros | default("Nexus FinLabs es una firma de asesoría tecnológica especializada en M&A, inteligencia artificial aplicada al sector financiero y procesos de transformación digital. Combinamos experiencia operativa con tecnología de vanguardia para generar resultados medibles.") }}</p>
+
+<div class="signatures mt-2">
+    <table>
+        <tr>
+            <td class="signature-box">
+                <p class="signature-title">ACEPTACIÓN</p>
+                <p>{{ empresa_destino }}</p>
+                <p>Nombre: _________________________</p>
+                <p>Cargo: _________________________</p>
+                <p>Fecha: _________________________</p>
+            </td>
+            <td style="width: 10%;">&nbsp;</td>
+            <td class="signature-box">
+                <p class="signature-title">EMISOR</p>
+                <p>{{ preparado_por | default("Nexus FinLabs") }}</p>
+                <p>Nombre: _________________________</p>
+                <p>Cargo: _________________________</p>
+                <p>Fecha: _________________________</p>
+            </td>
+        </tr>
+    </table>
+</div>
+{% endblock %}

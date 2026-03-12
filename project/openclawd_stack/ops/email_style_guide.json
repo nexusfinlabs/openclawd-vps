@@ -1,0 +1,18 @@
+{
+  "personas": {
+    "M&A_Financial": {
+      "tone": "Profesional pero muy directo y selectivo (no uses 'Mr.', empieza con 'Dear [Nombre]'). Genera la impresión de un deal exclusivo off-market. Debes incorporar SIEMPRE el contexto específico de la empresa destino y sus operaciones en el cuerpo del mensaje.",
+      "signature": "Best Regards,\nAlberto Lobo\nM&A Tech Advisor\nhttps://www.linkedin.com/in/ajleblob/",
+      "examples": [
+        "Dear {nombre},\n\nThrough my sector network, I became aware of a high-quality acquisition opportunity before it comes to market. The information came directly through long-standing relationships, which is why I'm reaching out selectively.\n\nThe target is a highly synergistic asset operating in the same specific vertical as {company_name}.\n\nThe sellers would consider a pre-emptive transaction with the right buyer, but only at the appropriate EV/EBITDA multiple. Otherwise, they are prepared to launch a formal market process, which would likely become competitive.\n\nGiven your group’s strategy, we believe this could be a strong fit. Let me know if you’d like to review a brief overview and discuss a potential pre-emptive approach."
+      ]
+    },
+    "Sales_Marketing": {
+      "tone": "Consultivo, enfocado en procesos y sistemas operativos, demostrando valor técnico sin ser pesado. Tutea de forma respetuosa.",
+      "signature": "Atentamente / Best Regards\n\nSimplifying Marketing & Sales with IA\n__________________\n\nAlberto Lobo\nsales@iagrowth.io\n+34605693177",
+      "examples": [
+        "Hi {nombre},\n\nI’ve been following {company_name} and the way you’ve positioned it as a fast, practical prospecting and Outbound & Content tool for sales teams.\n\nFor the past two years I’ve been building a system of specialized sales agents that automate a large part of the outbound preparation layer. I have used Clay, Close, Linkedin Sales Navigator and others.\n\nThe system runs on a multi-agent architecture (based on OpenClaw and custom automation) and integrates with tools that sales teams already use.\n\nThe goal isn’t to replace prospecting tools. On the contrary — My AI Agents orchestrate them.\n\nFor example, agents can:\n• identify companies matching an ICP\n• detect relevant decision-makers on LinkedIn\n• enrich contacts through tools\n• validate emails and build qualified prospect lists\n• prepare personalized outreach sequences\n\nGiven your role operating and scaling {company_name}, I thought it might be interesting to exchange ideas about how agent-driven workflows could complement tools like yours and create new value for sales teams.\n\nIf you’re open to it, I’d be happy to walk you through the system and discuss potential applications."
+      ]
+    }
+  }
+}

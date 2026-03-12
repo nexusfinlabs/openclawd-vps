@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="header-block text-center border-bottom pb-2">
+    <h1>{{ title }}</h1>
+    <h2>{{ doc_type }} / Reference: {{ ref_code }}</h2>
+    <p>Effective Date: {{ date }}</p>
+</div>
+
+<div class="meta-data mt-2">
+    <table>
+        <tr>
+            <td class="meta-label">PROVIDER (PARTY A):</td>
+            <td>NexusFinLabs / OpenClaw AI</td>
+        </tr>
+        <tr>
+            <td class="meta-label">CLIENT (PARTY B):</td>
+            <td>{{ client_name }}</td>
+        </tr>
+        <tr>
+            <td class="meta-label">JURISDICTION:</td>
+            <td>{{ jurisdiction }}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="content mt-2">
+    <h3>1. PREAMBLE & PURPOSE</h3>
+    <p>This document governs the relationship between the PROVIDER and the CLIENT regarding the 
+    <span class="tech-term">{{ project_name }}</span> project. 
+    The primary goal is: {{ project_purpose }}.</p>
+    
+    <h3>2. SCOPE OF WORK</h3>
+    <p>The following items are explicitly included in the project scope:</p>
+    <ul>
+        {% for item in scope_in %}
+        <li><span class="tech-term">{{ item.title }}</span>: {{ item.desc }}</li>
+        {% endfor %}
+    </ul>
+    
+    <h3>3. OUT OF SCOPE</h3>
+    <p>To ensure clarity, the following items remain strictly out of scope:</p>
+    <ul>
+        {% for item in scope_out %}
+        <li>{{ item }}</li>
+        {% endfor %}
+    </ul>
+
+    <h3>4. PRICING & MILESTONES</h3>
+    <p>The total agreed compensation is <strong>{{ total_price }} {{ currency }}</strong>, billed as follows:</p>
+    <table class="data-table">
+        <tr>
+            <th>Milestone</th>
+            <th>Deliverable / Phase</th>
+            <th>Amount ({{ currency }})</th>
+        </tr>
+        {% for m in milestones %}
+        <tr>
+            <td>{{ m.id }}</td>
+            <td><span class="tech-term">{{ m.desc }}</span></td>
+            <td>{{ m.amount }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    
+    <h3>5. GOVERNING LAW</h3>
+    <p>This agreement shall be governed and construed in accordance with the laws of <strong>{{ jurisdiction }}</strong>.</p>
+</div>
+
+<div class="signatures">
+    <h3>6. ACCEPTANCE & SIGNATURES</h3>
+    <p>By signing below, the parties agree to all terms stated herein.</p>
+    <table>
+        <tr>
+            <td class="signature-box">
+                <div class="signature-title">NexusFinLabs</div>
+                <br><br><br><br>
+                <span>Authorized Signature</span><br>
+                <span>Date: __________________</span>
+            </td>
+            <td></td>
+            <td class="signature-box">
+                <div class="signature-title">{{ client_name }}</div>
+                <br><br><br><br>
+                <span>Authorized Signature</span><br>
+                <span>Date: __________________</span>
+            </td>
+        </tr>
+    </table>
+</div>
+{% endblock %}
