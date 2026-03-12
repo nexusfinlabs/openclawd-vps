@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenClaw Command Router — local command executor
+After=network.target openclaw-gateway.service
+Wants=openclaw-gateway.service
+
+[Service]
+Type=simple
+User=albi_agent
+WorkingDirectory=/home/albi_agent/openclawd_stack
+ExecStart=/usr/bin/python3 ops/command_router.py
+Restart=always
+RestartSec=3
+Environment=PATH=/home/albi_agent/.nvm/versions/node/v22.22.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
