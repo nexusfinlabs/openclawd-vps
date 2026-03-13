@@ -82,3 +82,8 @@ docs/**/*.pdf
 # Presentaciones generadas
 **/PPT_*.pptx
 **/ANALYSIS_*.md
+
+# Generated docs (PPTX, PDF) — never upload
+project/docs/
+project/openclawd_stack/docs/*.pptx
+project/openclawd_stack/docs/*.pdf
