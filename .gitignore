@@ -59,3 +59,26 @@ node_modules/
 *.deb
 *.tar.gz
 *.qpkg
+
+# ── Personal / Private / Templates (NUNCA en git) ──
+# Plantillas PPTX (privadas de cliente)
+**/*.pptx
+**/*.pptm
+# Facturas, propuestas y documentos generados
+**/factura*.pdf
+**/invoice*.pdf
+**/OC-FRA*
+**/TSC-FRA*
+# Documentos privados de clientes
+**/clients.json
+**/invoice_counter.json
+# Contextos (pueden tener info confidencial)
+**/context/
+# Datos personales y NDA
+**/NDA_*.md
+**/SOW_*.md
+# PDFs generados
+docs/**/*.pdf
+# Presentaciones generadas
+**/PPT_*.pptx
+**/ANALYSIS_*.md
