@@ -1,117 +1,129 @@
-# 🏗️ OpenClaw Stack — Arquitectura V8
+# 🏗️ OpenClaw Stack — Arquitectura V9
 
 > Documento vivo. Última actualización: 2026-03-13.
 
 ---
 
-## 1. Vista General
-
-```mermaid
-graph TB
-    subgraph "📱 TÚ (Alberto)"
-        WA["WhatsApp Personal<br/>+34605693177"]
-        TG["Telegram<br/>@OpenCrawNexusBot"]
-    end
-
-    subgraph "🤖 Gateway (systemd, solo transporte)"
-        GW["openclaw-gateway<br/>Puerto 18789<br/>NO ejecuta comandos"]
-    end
-
-    subgraph "📝 Log File"
-        LOG["/tmp/openclaw/openclaw-YYYY-MM-DD.log"]
-    end
-
-    subgraph "⚡ Command Router (systemd, Python)"
-        ROUTER["command_router.py<br/>Tail log → regex → subprocess"]
-    end
-
-    subgraph "📧 ICS Watcher (systemd, Python)"
-        ICS["ics_watcher.py<br/>IMAP poll 1min → Google Calendar"]
-    end
-
-    subgraph "🔧 Scripts (ops/openclaw_skills/)"
-        SK1["linkedin-sheets.sh"]
-        SK2["enrich-email.sh"]
-        SK3["make-proposal.sh"]
-        SK4["send-proposal.sh"]
-        SK5["make-invoice.sh / send-invoice.sh"]
-        SK6["generate-doc.sh / draft-email.sh"]
-        SK7["calendar-*.sh"]
-        SK8["make-ppt.sh"]
-        SK9["analysis.sh"]
-        SK10["admin-ops.sh"]
-    end
-
-    subgraph "🐳 Docker Stack"
-        API["oc_api :8000"]
-        WORKER["oc_worker"]
-        EXP["oc_exporter :8001"]
-        PG["oc_postgres"]
-        RD["oc_redis"]
-    end
-
-    WA <-->|Baileys| GW
-    TG <-->|Bot API| GW
-    GW -->|escribe| LOG
-    ROUTER -->|tail -f| LOG
-    ROUTER -->|subprocess.run| SK1 & SK2 & SK3 & SK4 & SK5 & SK6 & SK7 & SK8 & SK9 & SK10
-    ICS -->|IMAP| INBOX["dealflow@nexusfinlabs.com"]
-    ICS -->|API| GCAL["Google Calendar"]
-    ROUTER -->|Redis| RD
-    SK7 -->|docker exec| API
-    API --> PG & RD
-    WORKER --> PG & RD
-    EXP -->|gspread| SHEETS["Google Sheets"]
-```
-
-### Principio clave
+## 1. Principio Fundamental
 
 ```
-WhatsApp/Telegram → Gateway (transporte) → Log File → Command Router → Scripts → openclaw message send
+WhatsApp/Telegram → Gateway (SOLO transporte) → Log File → Command Router (TODA la lógica) → Scripts → openclaw message send
 ```
 
-- **Gateway**: solo transporta mensajes. NO ejecuta comandos. `skills/` vacío. `commands.allowFrom = []`.
-- **Router**: único ejecutor. Lee el log, detecta `!`, ejecuta bash, responde por el mismo canal.
-- **Sin approvals. Sin cloud agent. Sin sandbox. 100% local.**
+**EL GATEWAY NO EJECUTA NADA.** Solo transporta mensajes.
+**EL ROUTER EJECUTA TODO.** Es el único que procesa comandos `!`.
 
 ---
 
-## 2. Servicios Nativos (systemd)
+## 2. Gateway — Qué Hace (MÍNIMO)
 
-| Servicio | Archivo | Función |
-|---|---|---|
-| `openclaw-gateway` | `/etc/systemd/system/openclaw-gateway.service` | Transporte WhatsApp/Telegram ↔ Log |
-| `command-router` | `/etc/systemd/system/command-router.service` | Ejecuta `!` comandos |
-| `ics-watcher` | `/etc/systemd/system/ics-watcher.service` | Auto-agrega ICS de email a Calendar |
-| `linkedin-worker` | `ops/linkedin_worker.py` | Procesa jobs LinkedIn async (Redis queue) |
+**Servicio**: `openclaw-gateway.service` (systemd, Node.js)
+**Binario**: `openclaw gateway` (npm package)
+**Config**: `/home/albi_agent/.openclaw/openclaw.json`
+
+### Lo que SÍ hace
+- Mantiene conexión WhatsApp (Baileys) y Telegram (Bot API)
+- Recibe mensajes entrantes de ambos canales
+- **Escribe CADA mensaje en** `/tmp/openclaw/openclaw-YYYY-MM-DD.log` (formato JSON)
+- Envía mensajes cuando se le pide: `openclaw message send --channel X --target Y --message Z`
+- Envía archivos adjuntos: `openclaw message send --media /path/to/file`
+
+### Lo que NO debe hacer (bloqueado en system-prompt.md REGLA #0)
+- ❌ NO procesa comandos `!`
+- ❌ NO ejecuta scripts
+- ❌ NO genera respuestas AI para `!`
+- ❌ NO busca en web (`web.search.enabled = false`)
+
+### ⚠️ Tiene un AI agent (NO queremos usarlo para `!`)
+El gateway tiene un AI agent (claude-opus vía OpenRouter) con herramienta `exec`.
+Para mensajes normales (sin `!`) SÍ responde vía AI.
+Para `!` comandos, `system-prompt.md` tiene **REGLA #0** que le ordena IGNORAR.
+
+### Config clave (`openclaw.json`)
+```json
+{
+  "tools.exec.security": "full",
+  "tools.exec.ask": "off",
+  "tools.web.search.enabled": false,
+  "tools.web.fetch.enabled": false,
+  "tools.elevated.allowFrom.whatsapp": [],
+  "tools.elevated.allowFrom.telegram": [],
+  "agents.defaults.model.primary": "anthropic/claude-opus-4-6"
+}
+```
+
+### Reiniciar
+```bash
+sudo systemctl restart openclaw-gateway
+sudo journalctl -u openclaw-gateway -f  # ver logs
+```
 
 ---
 
-## 3. Comandos Disponibles (17 total)
+## 3. Command Router — Qué Hace (TODO)
 
-| Comando | Script | Qué hace |
+**Servicio**: `command-router.service` (systemd, Python)
+**Archivo**: `ops/command_router.py`
+**Working dir**: `/home/albi_agent/openclawd_stack`
+
+### Cómo funciona (paso a paso)
+1. **Tail -f** del log del gateway (`/tmp/openclaw/openclaw-YYYY-MM-DD.log`)
+2. **Parsea** cada línea JSON buscando mensajes de los senders permitidos
+3. **Detecta** si empieza con `!` (e.g. `!make-ppt`, `!analysis`, `!help`)
+4. **Ejecuta** el script correspondiente via `subprocess.run(["bash", script_path, ...args])`
+5. **Pasa al script** las variables de entorno `SENDER_TARGET` y `SENDER_CHANNEL`
+6. **El script** genera output + archivos, y los envía via `openclaw message send`
+
+### Comandos inline (sin script)
+- `!help` → devuelve menú de ayuda
+- `!context norgine <texto>` → guarda archivo en `/context/norgine.md`
+- `!context-list` / `!context-show` / `!context-clear`
+
+### Ruta de scripts: `ops/openclaw_skills/`
+
+| Comando | Script | Función |
 |---|---|---|
-| `!help` | (inline) | Muestra menú de ayuda |
-| `!context <texto>` | (inline → Redis) | Guarda texto largo para reutilizar (2h TTL) |
-| `!context-show` | (inline → Redis) | Ver contexto guardado |
-| `!context-clear` | (inline → Redis) | Borrar contexto |
-| `!make-proposal <email> <ctx>` | `make-proposal.sh` | Genera borrador con LLM |
-| `!send-proposal <email>` | `send-proposal.sh` | Envía borrador por SMTP |
-| `!busca-email <nombre> <apellido> <dominio>` | `enrich-email.sh` | Waterfall: Hunter→Snov→SerpAPI→Permutaciones |
-| `!busca-linkedin <tab> <start> <end>` | `linkedin-sheets.sh` | LinkedIn search → Google Sheets (async Redis) |
-| `!make-invoice <descripción>` | `make-invoice.sh` | Genera factura PDF (IVA+IRPF) |
-| `!send-invoice <ref> [email]` | `send-invoice.sh` | Envía factura por SMTP |
-| `!generate-doc <tipo> <contenido>` | `generate-doc.sh` | PDF + DOCX (NDA, SOW, PROPUESTA) |
-| `!draft-email <company> <email> ...` | `draft-email.sh` | Email M&A con estilo de Alberto |
-| `!calendar-status [query]` | `calendar-status.sh` | Estado de invitaciones |
-| `!calendar-create <título> <dt> <emails>` | `calendar-create-event.sh` | Crea evento + envía ICS |
-| `!calendar-from-email <query>` | `calendar-from-email.sh` | Extrae ICS del inbox |
-| `!calendar-upload <path>` | `calendar-upload-ics.sh` | Sube .ics a Calendar |
-| `!make-ppt <prompt>` | `make-ppt.sh` | PPTX profesional (PptxGenJS) |
-| `!analysis <url> [contexto]` | `analysis.sh` | Scraping + análisis LLM profundo |
-| `!admin status\|fix-all\|restart-*` | `admin-ops.sh` | Health check / reinicio |
+| `!make-ppt` | `make-ppt.sh` | Presentaciones (PptxGenJS/python-pptx) |
+| `!analysis` | `analysis.sh` | Análisis web profundo + LLM |
+| `!busca-linkedin` | Async → Redis queue | LinkedIn → Google Sheets |
+| `!busca-email` | `enrich-email.sh` | Waterfall: Hunter→Snov→SerpAPI |
+| `!make-proposal` | `make-proposal.sh` | Borrador M&A con LLM |
+| `!send-proposal` | `send-proposal.sh` | Envía borrador por SMTP |
+| `!make-invoice` / `!send-invoice` | `make-invoice.sh` / `send-invoice.sh` | Facturación |
+| `!generate-doc` | `generate-doc.sh` | PDF + DOCX (NDA, SOW, etc.) |
+| `!draft-email` | `draft-email.sh` | Email M&A estilo Alberto |
+| `!calendar-*` | `calendar-*.sh` | Google Calendar ops |
+| `!admin` | `admin-ops.sh` | Status / reinicio |
 
-Ambos canales (WhatsApp y Telegram) funcionan **idéntico**. El router responde por el mismo canal.
+### Paridad WhatsApp/Telegram
+El router pasa `SENDER_CHANNEL` al script → el script responde por el MISMO canal.
+Todos los `!` commands funcionan **idéntico** en WhatsApp y Telegram.
+
+### Reiniciar (⚠️ USAR SYSTEMD, NUNCA NOHUP)
+```bash
+sudo systemctl restart command-router
+sudo journalctl -u command-router -f  # ver logs
+```
+
+> **NUNCA** usar `nohup python3 ops/command_router.py &` — crea duplicados con systemd.
+
+---
+
+## 4. Otros Servicios (systemd)
+
+| Servicio | Función | Restart |
+|---|---|---|
+| `openclaw-gateway` | Transporte WA/TG | `sudo systemctl restart openclaw-gateway` |
+| `command-router` | Ejecutor `!` commands | `sudo systemctl restart command-router` |
+| `tg_control` | Bot Telegram (legacy) | `sudo systemctl restart tg_control` |
+| `linkedin-worker` | Jobs async LinkedIn (Redis) | `@reboot` crontab |
+
+### Crontab
+```
+* * * * *    runner.sh       # Crawler cron
+*/5 * * * *  watchdog.sh     # Health check
+@reboot      linkedin_worker.py  # Redis worker
+```
 
 ---
 
