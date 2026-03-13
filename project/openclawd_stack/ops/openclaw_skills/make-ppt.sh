@@ -1,12 +1,15 @@
 #!/bin/bash
-# make-ppt.sh — Genera presentaciones profesionales (PptxGenJS)
+# make-ppt.sh — Genera presentaciones profesionales (LLM → PptxGenJS)
+#
+# Cada presentación es ÚNICA: el LLM genera un create.js a medida.
 #
 # Uso desde WhatsApp/Telegram:
 #   !make-ppt 5 slides sobre AI en pharma
 #   !make-ppt --context norgine 10 slides para VP IT
-#   !make-ppt --palette dark-premium 5 slides sobre payments
+#   !make-ppt --palette tech 5 slides sobre payments
+#   !make-ppt --context norgine --palette executive 10 slides
 #
-# Palettes: navy-executive (default), dark-premium, clean-bold, midnight, teal-trust
+# Palettes: pharma (default), tech, bold, trust, executive
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -26,7 +29,9 @@ resolve_context() {
   local name="$1"
   local base="${name%.md}"
   base="${base%.pdf}"
-  for f in "$CONTEXT_DIR/${base}.md" "$CONTEXT_DIR/${base}.pdf" "$CONTEXT_DIR/${name}" \
+  local PROJECT_CTX="/home/albi_agent/openclawd_stack/context"
+  for f in "$PROJECT_CTX/${base}.md" "$PROJECT_CTX/${base}.pdf" "$PROJECT_CTX/${name}" \
+           "$CONTEXT_DIR/${base}.md" "$CONTEXT_DIR/${base}.pdf" "$CONTEXT_DIR/${name}" \
            "$WORKSPACE/${base}.md" "$WORKSPACE/${base}.pdf" "$WORKSPACE/${name}"; do
     [ -f "$f" ] && echo "$f" && return 0
   done
@@ -34,7 +39,7 @@ resolve_context() {
 }
 
 # Parse flags
-PALETTE="navy-executive"
+PALETTE="pharma"
 CONTEXT_NAME=""
 ARGS=()
 
@@ -51,9 +56,9 @@ if [ ${#ARGS[@]} -eq 0 ]; then
     --message "❌ Uso:
 \`!make-ppt 5 slides sobre AI en pharma\`
 \`!make-ppt --context norgine 10 slides para VP IT\`
-\`!make-ppt --palette dark-premium 5 slides\`
+\`!make-ppt --palette tech 5 slides\`
 
-🎨 Paletas: navy-executive, dark-premium, clean-bold, midnight, teal-trust"
+🎨 Paletas: pharma, tech, bold, trust, executive"
   exit 1
 fi
 
@@ -97,18 +102,17 @@ else
   echo "$request" > "$PROMPT_FILE"
 fi
 
-# ── Generate with PptxGenJS ──
-output=$(node "$OPS_DIR/ops/ppt_generator.js" --prompt-file "$PROMPT_FILE" --palette "$PALETTE" 2>&1)
+# ── Generate with LLM → PptxGenJS ──
+output=$(python3 "$OPS_DIR/ops/ppt_dynamic.py" --prompt-file "$PROMPT_FILE" --palette "$PALETTE" 2>&1)
 file_path=$(echo "$output" | grep -o '/home/.*\.pptx' | head -1)
 
 # Send summary
 openclaw message send --channel "$CHANNEL" --target "$TARGET" --message "$output"
 
-# Send the PPTX file
+# Send the PPTX file as attachment
 if [ -n "$file_path" ] && [ -f "$file_path" ]; then
   openclaw message send --channel "$CHANNEL" --target "$TARGET" --media "$file_path"
 else
   openclaw message send --channel "$CHANNEL" --target "$TARGET" \
-    --message "⚠️ No se pudo generar el archivo. Output:
-$(echo "$output" | tail -5)"
+    --message "⚠️ No se generó el archivo PPTX. Revisa el log."
 fi

@@ -24,7 +24,11 @@ resolve_context() {
   local name="$1"
   local base="${name%.md}"
   base="${base%.pdf}"
+  local PROJECT_CTX="/home/albi_agent/openclawd_stack/context"
   local candidates=(
+    "$PROJECT_CTX/${base}.md"
+    "$PROJECT_CTX/${base}.pdf"
+    "$PROJECT_CTX/${name}"
     "$CONTEXT_DIR/${base}.md"
     "$CONTEXT_DIR/${base}.pdf"
     "$CONTEXT_DIR/${name}"
@@ -33,7 +37,7 @@ resolve_context() {
     "$WORKSPACE/${name}"
   )
   for f in "${candidates[@]}"; do
-    if [ -f "$f" ]; then echo "$f"; return 0; fi
+    [ -f "$f" ] && echo "$f" && return 0
   done
   return 1
 }
