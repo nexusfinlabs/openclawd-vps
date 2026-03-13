@@ -127,67 +127,59 @@ sudo journalctl -u command-router -f  # ver logs
 
 ---
 
-## 4. Presentaciones (`!make-ppt`)
+## 5. Presentaciones (`!make-ppt`)
 
-### Stack de generación
-
-| Motor | Formato | Tecnología | Cuándo usar |
-|---|---|---|---|
-| **PptxGenJS** (principal) | `.pptx` | Node.js + react-icons + sharp | Default. Presentaciones ejecutivas profesionales |
-| **Reveal.js** (alternativa) | `.html` | Python + CDN | Con `--html`. Interactivas, animaciones web |
-
-### Flujo PPTX (PptxGenJS)
+### Cómo funciona (LLM → create.js → PptxGenJS)
 
 ```
-!make-ppt 5 slides sobre AI en payments
-  → LLM (GPT-4o-mini) genera JSON estructurado (7 tipos de slide)
-  → PptxGenJS renderiza con paleta profesional
-  → react-icons → sharp → iconos PNG embedidos
-  → .pptx guardado en drafts/
-  → Enviado por WhatsApp
+!make-ppt --context norgine --palette pharma 10 slides para VP IT
+  → Lee contexto (norgine.md)
+  → LLM (Claude Sonnet) genera un create.js COMPLETO a medida
+  → node create.js → .pptx con diseño profesional
+  → Envía .pptx como adjunto por WhatsApp/Telegram
 ```
 
-### Tipos de slide
-
-| Tipo | Descripción |
-|---|---|
-| `cover` | Portada con barra accent, orb decorativo, tags |
-| `content_cards` | 4 cards verticales con iconos, números, sombras |
-| `content_rows` | Filas con métricas pill + panel lateral |
-| `two_column` | Dos columnas con cards |
-| `highlight` | Cita central destacada con quotes |
-| `stats` | Cards con números grandes + labels |
-| `closing` | Despedida con contacto |
+Cada presentación es **ÚNICA** — el LLM genera código JS diferente cada vez,
+adaptado al contenido, audiencia y paleta solicitada.
 
 ### Paletas
 
-| Paleta | Uso ideal |
-|---|---|
-| `navy-executive` (default) | Consulting, institucional, pharma |
-| `dark-premium` | Tech, startups, high-stakes |
-| `clean-bold` | Ejecutivo moderno, corporate |
-| `midnight` | Financiero, formal |
-| `teal-trust` | Sustainability, health tech |
+| Paleta | Colores | Uso ideal |
+|---|---|---|
+| `pharma` (default) | Navy + Teal + Gold | Pharma, biotech, healthcare |
+| `tech` | Negro + Teal + Amber | Tech, startups |
+| `bold` | Carbón + Naranja + Sand | Impacto visual, marketing |
+| `trust` | Navy + Ice Blue + Teal | Consulting, finanzas |
+| `executive` | Negro + Verde GitHub | Developer, ejecutivo C-suite |
 
-### Flags
+### Uso
 
 ```
-!make-ppt 5 slides sobre X                    → navy-executive PPTX
-!make-ppt --palette dark-premium 5 slides      → dark-premium PPTX
-!make-ppt --html 5 slides sobre X             → Reveal.js HTML
-!make-ppt --context 5 slides sobre esto        → Usa !context guardado
+!make-ppt 5 slides sobre AI en payments               → pharma (default)
+!make-ppt --palette tech 5 slides sobre fintech        → tech
+!make-ppt --context norgine 10 slides para VP IT       → pharma + contexto
+!make-ppt --context norgine --palette executive 7 slides → executive + contexto
 ```
+
+### Diseño obligatorio (en system prompt del LLM)
+
+- Barra lateral izquierda (TEAL + GOLD) en Title/CTA slides
+- Header (sección CAPS + título) en slides de contenido
+- Footer en TODAS las slides
+- Iconos de `react-icons` → PNG base64 via `sharp`
+- Cards con sombra (shape offset +0.04)
+- Tipografía: título 40-52pt, sección 8-9pt, body 9-11pt
+- Nunca texto-only — siempre elemento visual
 
 ### Archivos
 
 | Archivo | Función |
 |---|---|
-| `ops/ppt_generator.js` | Motor PptxGenJS (Node.js) |
-| `ops/revealjs_generator.py` | Motor Reveal.js (Python) |
-| `ops/ppt_generator.py` | Motor legacy python-pptx (fallback) |
+| `ops/ppt_dynamic.py` | Motor principal: prompt → LLM → create.js → node → .pptx |
+| `ops/ppt_example.js` | Ejemplo gold-standard (referencia para el LLM) |
 | `ops/openclaw_skills/make-ppt.sh` | Skill wrapper |
 | `ops/package.json` | Deps Node.js (pptxgenjs, react-icons, sharp) |
-| `ops/templates/ppt/` | Templates .pptx externos |
+| `context/` | Archivos .md/.pdf de contexto (drag & drop local) |
 
 ---
 
