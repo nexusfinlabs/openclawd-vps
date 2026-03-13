@@ -54,6 +54,7 @@ COMMANDS = {
     "!calendar-upload":  ("calendar-upload-ics.sh",   1),  # path
     "!make-invoice":     ("make-invoice.sh",           1),  # "5000 consulting para TechCorp"
     "!send-invoice":     ("send-invoice.sh",           0),  # [invoice_ref] [email]
+    "!make-ppt":         ("make-ppt.sh",               1),  # "5 slides sobre AI en fintech"
 }
 
 # ── Duplicate Prevention ────────────────────────────────
@@ -172,6 +173,10 @@ def _handle_help():
         '• `!send-invoice OC-FRA003` — Envía la factura por email',
         '• `!send-invoice OC-FRA003 email@client.com` — Envía + actualiza email',
         "  _Numeración automática. DB de clientes. IVA 21% + IRPF 15%_",
+        "",
+        "📊 *Presentaciones:*",
+        '• `!make-ppt 5 slides sobre AI en fintech` — Genera PPTX profesional',
+        "  _Dark theme. Contenido generado por LLM. Envío automático._",
         "",
         "⚙️ *Admin:*",
         '• `!admin status` — Docker + Gateway + APIs + PDFs',
