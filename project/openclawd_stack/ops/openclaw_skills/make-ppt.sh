@@ -104,15 +104,26 @@ fi
 
 # ── Generate with LLM → PptxGenJS ──
 output=$(python3 "$OPS_DIR/ops/ppt_dynamic.py" --prompt-file "$PROMPT_FILE" --palette "$PALETTE" 2>&1)
+exit_code=$?
 file_path=$(echo "$output" | grep -o '/home/.*\.pptx' | head -1)
 
+if [ $exit_code -ne 0 ] || [ -z "$file_path" ] || [ ! -f "$file_path" ]; then
+  openclaw message send --channel "$CHANNEL" --target "$TARGET" \
+    --message "❌ Error generando PPT:
+$(echo "$output" | tail -5)"
+  exit 1
+fi
+
+# Copy to docs/ for local sync (rsync pulls this to local)
+DOCS_DIR="/home/albi_agent/openclawd_stack/docs"
+mkdir -p "$DOCS_DIR"
+cp "$file_path" "$DOCS_DIR/" 2>/dev/null || true
+
 # Send summary
-openclaw message send --channel "$CHANNEL" --target "$TARGET" --message "$output"
+size_kb=$(( $(stat -c%s "$file_path" 2>/dev/null || echo 0) / 1024 ))
+openclaw message send --channel "$CHANNEL" --target "$TARGET" \
+  --message "✅ PPT generada (${size_kb} KB, paleta: $PALETTE)
+📎 Enviando archivo..."
 
 # Send the PPTX file as attachment
-if [ -n "$file_path" ] && [ -f "$file_path" ]; then
-  openclaw message send --channel "$CHANNEL" --target "$TARGET" --media "$file_path"
-else
-  openclaw message send --channel "$CHANNEL" --target "$TARGET" \
-    --message "⚠️ No se generó el archivo PPTX. Revisa el log."
-fi
+openclaw message send --channel "$CHANNEL" --target "$TARGET" --media "$file_path"

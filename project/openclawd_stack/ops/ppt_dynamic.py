@@ -4,7 +4,7 @@ ppt_dynamic.py — LLM-powered PptxGenJS presentation generator.
 
 Flow:
   1. Reads prompt (+ optional context)
-  2. Calls LLM with expert PptxGenJS system prompt + gold-standard example
+  2. Calls Anthropic API DIRECT with expert PptxGenJS system prompt
   3. LLM returns a complete create.js
   4. Executes: node create.js → output.pptx
   5. Returns the path to the generated .pptx
@@ -21,11 +21,13 @@ import subprocess
 import sys
 import tempfile
 import time
-import requests
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "anthropic/claude-sonnet-4"
+# ── API Config ──
+# Use Anthropic DIRECT (not OpenRouter)
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+MODEL = "claude-sonnet-4-20250514"
+
 DRAFTS_DIR = "/home/albi_agent/.openclaw/workspace"
 
 PALETTES = {
@@ -61,8 +63,6 @@ PALETTES = {
     },
 }
 
-# The gold-standard example is loaded from a file to keep this script manageable.
-# If the example file doesn't exist, we use a shorter inline reference.
 EXAMPLE_PATH = os.path.join(os.path.dirname(__file__), "ppt_example.js")
 
 SYSTEM_PROMPT = r"""Eres un experto en crear presentaciones PowerPoint profesionales con pptxgenjs.
@@ -83,6 +83,27 @@ REGLAS TÉCNICAS OBLIGATORIAS:
 - Sin markdown, sin explicaciones — solo código JS puro ejecutable
 - NUNCA uses require("fs") ni leas archivos — todo inline en el JS
 
+ANTI-PATRÓN PROHIBIDO — SLIDES EN BLANCO:
+❌ NUNCA hagas esto:
+  const s = pres.addSlide();
+  s.addText("Title", {x:1, y:1, w:8, h:1, fontSize:24});
+Eso genera slides BLANCAS sin diseño.
+
+✅ SIEMPRE haz esto:
+  const s = pres.addSlide();
+  s.background = { color: C.NAVY };  // ← OBLIGATORIO
+  s.addShape("rect", {x:0, y:0, w:10, h:0.82, fill:{color:C.NAVY}});  // header
+  s.addShape("rect", {x:0, y:0.82, w:10, h:0.045, fill:{color:C.TEAL}});  // accent
+  // ... contenido con shapes, cards, badges ...
+  s.addShape("rect", {x:0, y:5.325, w:10, h:0.3, fill:{color:"061020"}});  // footer
+
+ESTRUCTURA OBLIGATORIA DE CADA SLIDE:
+1. s.background = { color: C.NAVY }  ← SIEMPRE primer paso
+2. Header shape (rect w:10 h:0.82)
+3. Accent bar (rect h:0.045)
+4. Contenido con SHAPES (cards, rects, ellipses) — NUNCA solo texto
+5. Footer shape (rect y:5.325 h:0.3)
+
 HELPER ico() OBLIGATORIO (copiar tal cual):
 ```
 async function ico(IconComponent, color = "FFFFFF", size = 256) {
@@ -94,41 +115,28 @@ async function ico(IconComponent, color = "FFFFFF", size = 256) {
 }
 ```
 
-HELPERS addFooter() y addHeader() OBLIGATORIOS:
-- addFooter: barra fina en la parte inferior con label
-- addHeader: barra superior con sección (CAPS, charSpacing 3) + título
+HELPERS addFooter() y addHeader() OBLIGATORIOS — definirlos y usarlos en TODAS las slides.
 
-ESTRUCTURA MÍNIMA DE SLIDES (adaptar al contenido):
-1. Title slide — fondo oscuro, barra lateral izquierda (TEAL + línea GOLD), supertítulo CAPS, título grande (40-52pt), chips/tags, elementos decorativos (ellipses con alta transparency)
-2. Resumen / métricas — 3 cards con número grande, icono, label, accent bar superior
-3. Tabla o datos — tabla visual con rows alternantes, badges de color por categoría
-4. Split — dos paneles side-by-side comparando áreas
-5. Cards — 3-4 cards verticales con icono en círculo, num, título, descripción, sombra offset
-6. Proceso / pasos — filas numeradas con badge de color, icono, label, descripción
-7. CTA / Next Steps — fondo oscuro, barra lateral, título grande, pasos con círculos numerados
+TIPOS DE SLIDES (adaptar al nº que pida el usuario):
+1. Title slide — fondo NAVY, barra lateral (TEAL + GOLD), título 50pt, chips, ellipses decorativos
+2. Métricas — 3 cards con número grande (72pt), icono, accent bar superior
+3. Tabla visual — rows alternantes con badges de color
+4. Split — dos paneles side-by-side
+5. Cards — 3-4 cards verticales con sombra offset +0.04
+6. Proceso — filas numeradas con badge de color + icono
+7. CTA — fondo NAVY, barra lateral, título 52pt, pasos con círculos
 
-Si el usuario pide más slides (8, 10, 15), añade slides intermedias con más detalle.
-
-DISEÑO OBLIGATORIO EN CADA SLIDE:
-- Barra lateral izquierda en Title y CTA slides (0.5" TEAL + 0.04" GOLD)
-- Header con sección + título en slides de contenido
-- Footer en TODAS las slides
-- Iconos de react-icons (FaFlask, FaBrain, FaChartBar, FaDatabase, etc.) convertidos con ico()
-- Cards con sombra (rect offset +0.04 con transparency 60)
-- Jerarquía tipográfica: título 40-52pt, sección 8-9pt CAPS charSpacing 3, body 9-11pt
-- Nunca texto-only, siempre elemento visual (icono, card, shape, badge)
-- Uso de circles decorativos con alta transparency en title/CTA slides
+DISEÑO OBLIGATORIO:
+- Barra lateral (0.5" TEAL + 0.04" GOLD) en Title y CTA
+- Cards con sombra: rect offset +0.04, transparency 60
+- Tipografía: título 40-52pt, sección 8-9pt CAPS charSpacing 3, body 9-11pt
 - fontFace siempre "Calibri"
-
-PALETA: El usuario te dará un objeto C = { NAVY, DARK, TEAL, GOLD, ICE, WHITE, MUTED, CARD, LIGHT, BORDER }.
-Usa ESOS colores constantemente. Nunca inventes colores propios.
-Puedes usar tonos complementarios (ej: "4F46E5" morado para segunda categoría) pero mínimo.
+- NUNCA texto-only — SIEMPRE shapes debajo
 
 RESPONDE ÚNICAMENTE CON EL CÓDIGO JS. Nada de texto ni explicaciones."""
 
 
 def _load_example() -> str:
-    """Load the gold-standard example if available."""
     if os.path.exists(EXAMPLE_PATH):
         with open(EXAMPLE_PATH, "r", encoding="utf-8") as f:
             return f.read()
@@ -136,7 +144,9 @@ def _load_example() -> str:
 
 
 def call_llm(prompt: str, palette_name: str, output_filename: str) -> str:
-    """Call the LLM to generate create.js code."""
+    """Call Anthropic API directly to generate create.js code."""
+    import requests
+
     palette = PALETTES.get(palette_name, PALETTES["pharma"])
     palette_code = "\n".join(f'  {k}: "{v}",' for k, v in palette.items() if k != "desc")
 
@@ -150,9 +160,8 @@ EJEMPLO DE REFERENCIA (calidad que debes igualar o superar):
 {example}
 </example>
 
-Genera código al MISMO nivel de detalle visual que el ejemplo. No copies el contenido,
-genera contenido NUEVO basado en las instrucciones del usuario, pero con la misma calidad
-visual: misma estructura de helpers, mismos patterns de cards/shadows/icons/badges."""
+Genera código al MISMO nivel de detalle visual. No copies el contenido,
+genera contenido NUEVO pero con la misma calidad visual."""
 
     user_message = f"""Genera un create.js completo usando esta paleta:
 
@@ -168,26 +177,28 @@ INSTRUCCIONES DEL USUARIO:
 """
 
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
     }
 
     payload = {
         "model": MODEL,
+        "max_tokens": 16000,
+        "system": SYSTEM_PROMPT,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message},
         ],
-        "max_tokens": 16000,
-        "temperature": 0.7,
     }
 
     print(f"🎨 Generando con paleta '{palette_name}' ({palette.get('desc', '')})...")
-    resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=120)
+    print(f"  → Anthropic API ({MODEL})...")
+
+    resp = requests.post(ANTHROPIC_URL, headers=headers, json=payload, timeout=120)
     resp.raise_for_status()
 
     data = resp.json()
-    content = data["choices"][0]["message"]["content"]
+    content = data["content"][0]["text"]
 
     # Extract JS code — strip markdown fences if present
     code = content.strip()
@@ -215,8 +226,8 @@ def main():
         print("❌ Prompt vacío")
         sys.exit(1)
 
-    if not OPENROUTER_API_KEY:
-        print("❌ OPENROUTER_API_KEY no configurada")
+    if not ANTHROPIC_API_KEY:
+        print("❌ ANTHROPIC_API_KEY no configurada en .env")
         sys.exit(1)
 
     # Generate output filename
@@ -279,7 +290,6 @@ def main():
     if os.path.exists(generated_path):
         shutil.move(generated_path, output_path)
     else:
-        # Check any .pptx in work_dir
         for f in os.listdir(work_dir):
             if f.endswith(".pptx"):
                 shutil.move(os.path.join(work_dir, f), output_path)
