@@ -103,7 +103,7 @@ else
 fi
 
 # ── Generate with LLM → PptxGenJS ──
-output=$(python3 "$OPS_DIR/ops/ppt_dynamic.py" --prompt-file "$PROMPT_FILE" --palette "$PALETTE" 2>&1)
+output=$(python3 "$OPS_DIR/ppt_dynamic.py" --prompt-file "$PROMPT_FILE" --palette "$PALETTE" 2>&1)
 exit_code=$?
 file_path=$(echo "$output" | grep -o '/home/.*\.pptx' | head -1)
 
