@@ -34,7 +34,28 @@ SEARCH_SCRIPT = BASE_DIR / "ops" / "linkedin_search.py"
 LOG_DIR     = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
-def run_job(job: dict) -> str:
+def _notify_chat(message, channel="whatsapp", target="34605693177"):
+    """Send a notification back to the user's chat channel via openclaw CLI."""
+    try:
+        env = os.environ.copy()
+        env["PATH"] = f"/home/albi_agent/.nvm/versions/node/v22.22.0/bin:{env.get('PATH', '')}"
+        subprocess.run(
+            [
+                "openclaw", "message", "send",
+                "--channel", channel,
+                "--target", target,
+                "--message", message,
+            ],
+            timeout=30,
+            env=env,
+            capture_output=True,
+        )
+    except Exception as e:
+        print(f"[worker] Failed to send chat notification: {e}", flush=True)
+
+
+def run_job(job: dict) -> tuple[str, str]:
+    """Run linkedin_search.py and return (status, output_tail)."""
     tab      = job.get("tab", "payments")
     top_rows = job.get("top_rows")
     start_row = job.get("start_row")
@@ -60,11 +81,21 @@ def run_job(job: dict) -> str:
     with open(log_path, "a") as log_f:
         proc = subprocess.run(
             cmd, env=env,
-            stdout=log_f, stderr=log_f,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, timeout=600,   # 10 min max per job
         )
+        # Also write to log file
+        if proc.stdout:
+            log_f.write(proc.stdout)
 
-    return "ok" if proc.returncode == 0 else f"error (code {proc.returncode})"
+    # Extract last meaningful lines for the notification
+    output_tail = ""
+    if proc.stdout:
+        lines = [l for l in proc.stdout.strip().splitlines() if l.strip()]
+        output_tail = "\n".join(lines[-5:])  # last 5 lines
+
+    status = "ok" if proc.returncode == 0 else f"error (code {proc.returncode})"
+    return status, output_tail
 
 
 def main():
@@ -81,18 +112,41 @@ def main():
             _, raw = item
             job = json.loads(raw)
             job_id = job.get("job_id", "?")
+            channel = job.get("channel", "whatsapp")
+            target = job.get("target", "34605693177")
             print(f"[worker] Job {job_id}: {job}", flush=True)
 
-            result = run_job(job)
+            result, output_tail = run_job(job)
             print(f"[worker] Job {job_id} finished: {result}", flush=True)
 
-            # Push result so oc_control can read it (optional)
+            # Push result to Redis (optional, for oc_control)
             r.setex(f"oc:linkedin_result:{job_id}", 300, json.dumps({
                 "job_id": job_id,
                 "status": result,
                 "tab": job.get("tab", "payments"),
                 "top_rows": job.get("top_rows"),
             }))
+
+            # Notify the user on their original channel
+            tab = job.get("tab", "payments")
+            rows_desc = f"{job.get('start_row', '?')}-{job.get('end_row', '?')}"
+            if result == "ok":
+                msg = (
+                    f"✅ LinkedIn search completado\n"
+                    f"• Job: `{job_id}` | Tab: `{tab}` | Rows: `{rows_desc}`\n"
+                )
+                if output_tail:
+                    msg += f"\n```\n{output_tail[:500]}\n```"
+            else:
+                msg = (
+                    f"❌ LinkedIn search falló\n"
+                    f"• Job: `{job_id}` | Tab: `{tab}` | Rows: `{rows_desc}`\n"
+                    f"• Status: `{result}`\n"
+                )
+                if output_tail:
+                    msg += f"\n```\n{output_tail[:500]}\n```"
+
+            _notify_chat(msg, channel=channel, target=target)
 
         except KeyboardInterrupt:
             print("[worker] Stopping.", flush=True)

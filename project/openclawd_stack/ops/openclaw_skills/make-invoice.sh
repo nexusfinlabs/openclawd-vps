@@ -11,7 +11,7 @@ export PATH="/home/albi_agent/.nvm/versions/node/v22.22.0/bin:$PATH"
 [ -f "$OPS_DIR/.env" ] && set -a && source "$OPS_DIR/.env" && set +a
 
 if [ -z "${1:-}" ]; then
-  openclaw message send --channel whatsapp --target 34605693177 --message "❌ Uso: \`!make-invoice 5000 consulting para TechCorp\`"
+  openclaw message send --channel "$CHANNEL" --target "$TARGET" --message "❌ Uso: \`!make-invoice 5000 consulting para TechCorp\`"
   exit 1
 fi
 
@@ -22,4 +22,4 @@ request="$*"
 output=$(python3 "$OPS_DIR/ops/invoice_manager.py" make "$request" 2>&1)
 
 # Send result via WhatsApp
-openclaw message send --channel whatsapp --target 34605693177 --message "$output"
+openclaw message send --channel "$CHANNEL" --target "$TARGET" --message "$output"

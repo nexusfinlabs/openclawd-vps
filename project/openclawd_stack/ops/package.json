@@ -1,0 +1,13 @@
+{
+  "name": "openclawd-ppt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PptxGenJS presentation generator for OpenClawd",
+  "dependencies": {
+    "pptxgenjs": "^3.12.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.2.0",
+    "sharp": "^0.33.0"
+  }
+}

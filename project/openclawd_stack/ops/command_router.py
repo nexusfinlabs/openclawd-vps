@@ -15,6 +15,7 @@ import json
 import os
 import re
 import subprocess
+import uuid
 import sys
 import time
 import logging
@@ -26,6 +27,10 @@ WORK_DIR = "/home/albi_agent/openclawd_stack"
 LOG_DIR = "/tmp/openclaw"
 ALLOWED_SENDERS = {"+34605693177", "7024795874"}  # WhatsApp + Telegram
 SUBPROCESS_TIMEOUT = 120  # seconds
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+LINKEDIN_JOB_QUEUE = "oc:jobs:linkedin"
+CONTEXT_KEY_PREFIX = "oc:context:"
+CONTEXT_TTL = 7200  # 2 hours
 
 # ── Logging ─────────────────────────────────────────────
 logging.basicConfig(
@@ -55,6 +60,7 @@ COMMANDS = {
     "!make-invoice":     ("make-invoice.sh",           1),  # "5000 consulting para TechCorp"
     "!send-invoice":     ("send-invoice.sh",           0),  # [invoice_ref] [email]
     "!make-ppt":         ("make-ppt.sh",               1),  # "5 slides sobre AI en fintech"
+    "!analysis":         ("analysis.sh",                1),  # url [context]
 }
 
 # ── Duplicate Prevention ────────────────────────────────
@@ -175,8 +181,17 @@ def _handle_help():
         "  _Numeración automática. DB de clientes. IVA 21% + IRPF 15%_",
         "",
         "📊 *Presentaciones:*",
-        '• `!make-ppt 5 slides sobre AI en fintech` — Genera PPTX profesional',
-        "  _Dark theme. Contenido generado por LLM. Envío automático._",
+        '• `!make-ppt 5 slides sobre AI en fintech` — PPTX profesional (PptxGenJS)',
+        '• `!make-ppt --html 5 slides sobre AI` — HTML Reveal.js (animaciones)',
+        '• `!make-ppt --palette dark-premium 5 slides` — Paleta específica',
+        '• `!make-ppt --context 5 slides` — Usa contexto guardado',
+        "  _Paletas: navy-executive, dark-premium, clean-bold, midnight, teal-trust_",
+        "",
+        "🔍 *Análisis Web:*",
+        '• `!analysis https://example.com` — Scraping + análisis LLM profundo',
+        '• `!analysis https://example.com contexto extra` — Con contexto',
+        '• `!analysis --context https://example.com` — Usa !context guardado',
+        "  _Sigue links, lee PDFs/HTML, genera reporte .md_",
         "",
         "⚙️ *Admin:*",
         '• `!admin status` — Docker + Gateway + APIs + PDFs',
@@ -188,9 +203,175 @@ def _handle_help():
         "ℹ️ *Info:*",
         '• `!help` — Este menú',
         "",
-        "💡 _Router local V6. Sin approvals. Sin cloud agent. 100% determinista._",
+        "📝 *Contexto (persistente):*",
+        '• `!context norgine <texto>` — Guarda como norgine.md',
+        '• `!context <texto>` — Guarda como default.md',
+        '• `!context-list` — Ver todos los contextos guardados',
+        '• `!context-show norgine` — Ver contenido',
+        '• `!context-clear norgine` — Borrar uno',
+        "  _Luego: `!make-ppt --context norgine --template 5 10 slides`_",
+        "",
+        "💡 _Router local V8. Sin approvals. Sin cloud agent. 100% determinista._",
     ]
     return "\n".join(lines)
+
+
+def _enqueue_linkedin_job(args, channel="whatsapp", target="34605693177"):
+    """
+    Enqueue a LinkedIn search job in Redis for async processing by linkedin_worker.py.
+    Returns immediately — no 120s timeout risk.
+    """
+    import redis as _redis
+
+    tab = args[0] if len(args) >= 1 else "payments"
+    start_row = int(args[1]) if len(args) >= 2 else 2
+    end_row = int(args[2]) if len(args) >= 3 else None
+
+    job_id = str(uuid.uuid4())[:8]
+    job = {
+        "job_id": job_id,
+        "tab": tab,
+        "start_row": start_row,
+        "end_row": end_row,
+        "channel": channel,
+        "target": target,
+    }
+
+    try:
+        r = _redis.from_url(REDIS_URL, decode_responses=True)
+        r.rpush(LINKEDIN_JOB_QUEUE, json.dumps(job))
+        queue_len = r.llen(LINKEDIN_JOB_QUEUE)
+        log.info("LinkedIn job enqueued: %s (queue len=%d)", job, queue_len)
+
+        rows_desc = f"{start_row}-{end_row}" if end_row else f"{start_row}+"
+        _send_reply(
+            f"🔍 LinkedIn search encolado\n"
+            f"• Job: `{job_id}`\n"
+            f"• Tab: `{tab}` | Rows: `{rows_desc}`\n"
+            f"• Cola: {queue_len} job(s) pendientes\n\n"
+            f"El worker lo procesará en background (hasta 10 min). "
+            f"Recibirás notificación cuando termine.",
+            channel=channel, target=target,
+        )
+    except Exception as e:
+        log.error("Failed to enqueue LinkedIn job: %s", e)
+        _send_reply(f"❌ Error encolando LinkedIn job: {str(e)[:200]}", channel=channel, target=target)
+
+
+CONTEXT_DIR = "/home/albi_agent/.openclaw/workspace/context"
+
+
+def _handle_context(body_stripped, channel="whatsapp", target="34605693177"):
+    """
+    Handle !context, !context-show, !context-list, !context-clear commands.
+    Stores text as named .md files in CONTEXT_DIR for persistent reuse.
+
+    Usage:
+      !context norgine <long text>       → saves context/norgine.md
+      !context <long text>               → saves context/default.md
+      !context-list                      → lists all saved contexts
+      !context-show norgine              → shows norgine.md content
+      !context-clear norgine             → deletes norgine.md
+      !context-clear                     → deletes all
+    """
+    import re as _re
+    os.makedirs(CONTEXT_DIR, exist_ok=True)
+
+    try:
+        # !context-clear [name]
+        if body_stripped.startswith("!context-clear"):
+            name = body_stripped[len("!context-clear"):].strip()
+            if name:
+                path = os.path.join(CONTEXT_DIR, f"{name.replace('.md','')}.md")
+                if os.path.exists(path):
+                    os.unlink(path)
+                    _send_reply(f"🗑️ Contexto `{name}` borrado.", channel=channel, target=target)
+                else:
+                    _send_reply(f"❌ No existe contexto `{name}`.", channel=channel, target=target)
+            else:
+                # Clear all
+                count = 0
+                for f in os.listdir(CONTEXT_DIR):
+                    if f.endswith(".md"):
+                        os.unlink(os.path.join(CONTEXT_DIR, f))
+                        count += 1
+                _send_reply(f"🗑️ {count} contexto(s) borrados.", channel=channel, target=target)
+            return
+
+        # !context-list
+        if body_stripped == "!context-list":
+            files = sorted(f for f in os.listdir(CONTEXT_DIR) if f.endswith(".md"))
+            if files:
+                listing = "\n".join(
+                    f"• `{f}` ({os.path.getsize(os.path.join(CONTEXT_DIR, f)):,} chars)"
+                    for f in files
+                )
+                _send_reply(f"📂 *Contextos guardados:*\n{listing}", channel=channel, target=target)
+            else:
+                _send_reply("📂 No hay contextos guardados.", channel=channel, target=target)
+            return
+
+        # !context-show [name]
+        if body_stripped.startswith("!context-show"):
+            name = body_stripped[len("!context-show"):].strip() or "default"
+            path = os.path.join(CONTEXT_DIR, f"{name.replace('.md','')}.md")
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    ctx = f.read()
+                preview = ctx[:500] + ("..." if len(ctx) > 500 else "")
+                _send_reply(
+                    f"📝 *Contexto `{name}`* ({len(ctx):,} chars):\n\n{preview}",
+                    channel=channel, target=target,
+                )
+            else:
+                _send_reply(f"📝 No existe contexto `{name}`.", channel=channel, target=target)
+            return
+
+        # !context [name] <text> — store
+        text = body_stripped[len("!context"):].strip()
+        if not text:
+            _send_reply(
+                "❌ Uso:\n"
+                "`!context norgine <texto largo>` → guarda como norgine.md\n"
+                "`!context <texto>` → guarda como default.md\n"
+                "`!context-list` → ver todos\n"
+                "`!context-show norgine` → ver contenido\n"
+                "`!context-clear norgine` → borrar\n\n"
+                "Luego: `!make-ppt --context norgine --template 5 10 slides`",
+                channel=channel, target=target,
+            )
+            return
+
+        # Parse: first word = name (if alphanumeric), rest = content
+        # If first word looks like content (has spaces in it, or is very long), use "default"
+        parts = text.split(None, 1)
+        if len(parts) >= 2 and _re.match(r'^[a-zA-Z0-9_\-]+$', parts[0]) and len(parts[0]) <= 40:
+            ctx_name = parts[0].lower()
+            ctx_text = parts[1]
+        else:
+            ctx_name = "default"
+            ctx_text = text
+
+        filename = f"{ctx_name}.md"
+        filepath = os.path.join(CONTEXT_DIR, filename)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(ctx_text)
+
+        preview = ctx_text[:200] + ("..." if len(ctx_text) > 200 else "")
+        _send_reply(
+            f"✅ Contexto guardado: `{filename}` ({len(ctx_text):,} chars)\n\n"
+            f"_{preview}_\n\n"
+            f"Ahora puedes usar:\n"
+            f"• `!make-ppt --context {ctx_name} --template 5 10 slides`\n"
+            f"• `!analysis --context {ctx_name} https://url`\n"
+            f"• `!context-list` para ver todos\n"
+            f"• `!context-show {ctx_name}` para verificar",
+            channel=channel, target=target,
+        )
+    except Exception as e:
+        log.error("Context command error: %s", e)
+        _send_reply(f"❌ Error con contexto: {str(e)[:200]}", channel=channel, target=target)
 
 
 def _execute_command(body, channel="whatsapp", target="34605693177"):
@@ -203,6 +384,11 @@ def _execute_command(body, channel="whatsapp", target="34605693177"):
     # Handle !help separately (no script needed)
     if body_stripped == "!help":
         _send_reply(_handle_help(), channel=channel, target=target)
+        return
+
+    # Handle !context commands (no script needed — direct Redis)
+    if body_stripped.startswith("!context"):
+        _handle_context(body_stripped, channel=channel, target=target)
         return
 
     # Find matching command
@@ -218,6 +404,25 @@ def _execute_command(body, channel="whatsapp", target="34605693177"):
         return
 
     script_name, min_args = COMMANDS[matched_cmd]
+
+    # Extract arguments (everything after the command prefix)
+    args_str = body_stripped[len(matched_cmd):].strip()
+    if args_str:
+        try:
+            import shlex
+            args = shlex.split(args_str)
+        except ValueError:
+            args = args_str.split()
+    else:
+        args = []
+
+    # ── ASYNC PATH: LinkedIn search → Redis queue (no 120s timeout) ──
+    if matched_cmd == "!busca-linkedin":
+        log.info("ASYNC: LinkedIn job → Redis queue (args: %s)", args)
+        _enqueue_linkedin_job(args, channel=channel, target=target)
+        return
+
+    # ── SYNC PATH: all other commands ────────────────────────────────
     script_path = os.path.join(SKILLS_DIR, script_name)
 
     if not os.path.isfile(script_path):
@@ -225,26 +430,15 @@ def _execute_command(body, channel="whatsapp", target="34605693177"):
         _send_reply(f"❌ Script no encontrado: {script_name}", channel=channel, target=target)
         return
 
-    # Extract arguments (everything after the command prefix)
-    args_str = body_stripped[len(matched_cmd):].strip()
-
-    # Split arguments respecting quotes
-    if args_str:
-        try:
-            import shlex
-            args = shlex.split(args_str)
-        except ValueError:
-            # If shlex fails (unmatched quotes), fall back to simple split
-            args = args_str.split()
-    else:
-        args = []
-
     log.info("EXEC: %s %s (args: %s)", script_name, args, len(args))
 
     # Send acknowledgement
     _send_reply(f"⚡ Ejecutando `{matched_cmd}` ...", channel=channel, target=target)
 
-    # Execute the script
+    # Execute the script with sender context
+    env = os.environ.copy()
+    env["SENDER_TARGET"] = target
+    env["SENDER_CHANNEL"] = channel
     cmd = ["bash", script_path] + args
     try:
         result = subprocess.run(
@@ -253,11 +447,11 @@ def _execute_command(body, channel="whatsapp", target="34605693177"):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=WORK_DIR,
+            env=env,
         )
         if result.returncode != 0:
             stderr_text = result.stderr.decode("utf-8", errors="replace")[:500]
             log.error("Script %s failed (rc=%d): %s", script_name, result.returncode, stderr_text)
-            # Don't send error via WA here — scripts send their own errors
         else:
             log.info("Script %s completed OK", script_name)
 

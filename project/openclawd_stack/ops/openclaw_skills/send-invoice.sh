@@ -30,4 +30,4 @@ fi
 output=$(python3 "$OPS_DIR/ops/invoice_manager.py" send "$invoice_ref" 2>&1)
 
 # Send result via WhatsApp
-openclaw message send --channel whatsapp --target 34605693177 --message "$output"
+openclaw message send --channel "$CHANNEL" --target "$TARGET" --message "$output"
