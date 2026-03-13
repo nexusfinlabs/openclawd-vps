@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from calendar_manager import parse_ics_and_add_to_calendar
 
 # ── Config ──────────────────────────────────────────────
-POLL_INTERVAL = 300  # 5 minutes
+POLL_INTERVAL = 60  # 1 minute
 PROCESSED_FILE = "/tmp/ics_watcher_processed.json"
 
 IMAP_CONFIG = {
@@ -123,14 +123,15 @@ def check_inbox():
         mail.login(IMAP_CONFIG["email"], password)
         mail.select("inbox")
 
-        # Search for emails with calendar content (UNSEEN first, then recent)
+        # Only search TODAY's emails (avoids reprocessing old ones)
+        today_str = datetime.now().strftime("%d-%b-%Y")  # e.g. "12-Mar-2026"
         _, unseen_nums = mail.search(None, "UNSEEN")
-        _, recent_nums = mail.search(None, "(SINCE 01-Mar-2026)")
+        _, today_nums = mail.search(None, f'(SINCE {today_str})')
 
-        # Combine and deduplicate, prioritize unseen
+        # Combine and deduplicate
         all_nums = set()
-        for nums in [unseen_nums[0].split(), recent_nums[0].split()[-20:]]:
-            all_nums.update(nums)
+        for nums in [unseen_nums[0].split(), today_nums[0].split()]:
+            all_nums.update(n for n in nums if n)
 
         log.info("Checking %d emails for .ics attachments...", len(all_nums))
 

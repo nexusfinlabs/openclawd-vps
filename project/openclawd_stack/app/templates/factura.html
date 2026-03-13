@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 25mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #2d2d2d; font-size: 10pt; line-height: 1.5; }
+  
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 3px solid #1a73e8; padding-bottom: 20px; }
+  .header-left h1 { font-size: 24pt; color: #1a73e8; font-weight: 700; letter-spacing: -0.5px; }
+  .header-left .subtitle { color: #666; font-size: 9pt; margin-top: 4px; }
+  .header-right { text-align: right; }
+  .header-right .invoice-num { font-size: 14pt; font-weight: 700; color: #1a73e8; }
+  .header-right .invoice-date { color: #666; font-size: 9pt; margin-top: 4px; }
+  
+  .parties { display: flex; justify-content: space-between; margin-bottom: 30px; gap: 40px; }
+  .party { flex: 1; }
+  .party-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 1px; color: #999; font-weight: 600; margin-bottom: 6px; }
+  .party-name { font-size: 12pt; font-weight: 700; color: #2d2d2d; }
+  .party-detail { font-size: 9pt; color: #555; }
+  
+  table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+  thead th { background: #1a73e8; color: white; padding: 10px 12px; text-align: left; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  thead th:last-child, thead th:nth-child(3), thead th:nth-child(4) { text-align: right; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 10pt; }
+  tbody td:last-child, tbody td:nth-child(3), tbody td:nth-child(4) { text-align: right; }
+  tbody tr:nth-child(even) { background: #f8f9fa; }
+  
+  .totals { display: flex; justify-content: flex-end; margin-bottom: 30px; }
+  .totals-table { width: 280px; }
+  .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 10pt; }
+  .totals-row.subtotal { border-top: 1px solid #ddd; padding-top: 10px; }
+  .totals-row.total { border-top: 2px solid #1a73e8; padding-top: 10px; font-weight: 700; font-size: 14pt; color: #1a73e8; }
+  
+  .payment-info { background: #f8f9fa; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; }
+  .payment-info h3 { font-size: 10pt; color: #1a73e8; margin-bottom: 8px; }
+  .payment-info p { font-size: 9pt; color: #555; }
+  
+  .footer { text-align: center; color: #999; font-size: 8pt; border-top: 1px solid #eee; padding-top: 15px; margin-top: 30px; }
+  .notes { font-size: 9pt; color: #666; margin-bottom: 20px; }
+  .notes strong { color: #2d2d2d; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>FACTURA</h1>
+    <div class="subtitle">Alberto Jesús Lebrón Lobo — Servicios de Consultoría</div>
+  </div>
+  <div class="header-right">
+    <div class="invoice-num">{{ invoice_number }}</div>
+    <div class="invoice-date">Fecha: {{ invoice_date }}</div>
+    <div class="invoice-date">Vencimiento: {{ due_date }}</div>
+  </div>
+</div>
+
+<div class="parties">
+  <div class="party">
+    <div class="party-label">Emisor</div>
+    <div class="party-name">Alberto Jesús Lebrón Lobo</div>
+    <div class="party-detail">CIF: 09038288-R</div>
+    <div class="party-detail">C/ Taulat 60</div>
+    <div class="party-detail">08005 Barcelona, España</div>
+    <div class="party-detail">dealflow@nexusfinlabs.com</div>
+  </div>
+  <div class="party">
+    <div class="party-label">Cliente</div>
+    <div class="party-name">{{ client_name }}</div>
+    <div class="party-detail">{{ client_id_label }}: {{ client_id }}</div>
+    <div class="party-detail">{{ client_address }}</div>
+    <div class="party-detail">{{ client_city }}</div>
+    {% if client_email %}<div class="party-detail">{{ client_email }}</div>{% endif %}
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:50%">Concepto</th>
+      <th style="width:15%">Cantidad</th>
+      <th style="width:15%">Precio Unit.</th>
+      <th style="width:20%">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.description }}</td>
+      <td>{{ item.quantity }}</td>
+      <td>{{ "%.2f"|format(item.unit_price) }} €</td>
+      <td>{{ "%.2f"|format(item.total) }} €</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="totals">
+  <div class="totals-table">
+    <div class="totals-row subtotal">
+      <span>Subtotal</span>
+      <span>{{ "%.2f"|format(subtotal) }} €</span>
+    </div>
+    {% if irpf_pct %}
+    <div class="totals-row">
+      <span>IRPF ({{ irpf_pct }}%)</span>
+      <span>-{{ "%.2f"|format(irpf_amount) }} €</span>
+    </div>
+    {% endif %}
+    <div class="totals-row">
+      <span>IVA ({{ iva_pct }}%)</span>
+      <span>{{ "%.2f"|format(iva_amount) }} €</span>
+    </div>
+    <div class="totals-row total">
+      <span>TOTAL</span>
+      <span>{{ "%.2f"|format(total) }} €</span>
+    </div>
+  </div>
+</div>
+
+{% if payment_method %}
+<div class="payment-info">
+  <h3>Datos de Pago</h3>
+  <p>{{ payment_method }}</p>
+  {% if iban %}<p><strong>IBAN:</strong> {{ iban }}</p>{% endif %}
+</div>
+{% endif %}
+
+{% if notes %}
+<div class="notes">
+  <strong>Notas:</strong> {{ notes }}
+</div>
+{% endif %}
+
+<div class="footer">
+  Alberto Jesús Lebrón Lobo · CIF 09038288-R · C/ Taulat 60, 08005 Barcelona
+</div>
+
+</body>
+</html>

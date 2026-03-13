@@ -52,6 +52,8 @@ COMMANDS = {
     "!calendar-create":  ("calendar-create-event.sh", 3),  # title datetime emails
     "!calendar-from-email": ("calendar-from-email.sh", 1), # query
     "!calendar-upload":  ("calendar-upload-ics.sh",   1),  # path
+    "!make-invoice":     ("make-invoice.sh",           1),  # "5000 consulting para TechCorp"
+    "!send-invoice":     ("send-invoice.sh",           0),  # [invoice_ref] [email]
 }
 
 # ── Duplicate Prevention ────────────────────────────────
@@ -164,6 +166,12 @@ def _handle_help():
         '• `!generate-doc PROPUESTA "empresa: X, contexto: Y"` — Propuesta comercial',
         '• `!generate-doc <TIPO> <texto_libre>` — Documento genérico',
         "  _PDF + DOCX enviados por WhatsApp_",
+        "",
+        "🧾 *Facturas:*",
+        '• `!make-invoice 5000 consulting para TechCorp` — Genera factura PDF',
+        '• `!send-invoice OC-FRA003` — Envía la factura por email',
+        '• `!send-invoice OC-FRA003 email@client.com` — Envía + actualiza email',
+        "  _Numeración automática. DB de clientes. IVA 21% + IRPF 15%_",
         "",
         "⚙️ *Admin:*",
         '• `!admin status` — Docker + Gateway + APIs + PDFs',
