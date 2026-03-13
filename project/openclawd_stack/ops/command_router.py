@@ -98,6 +98,8 @@ def _parse_inbound_message(line):
     """
     Parse a gateway log line and extract inbound message data.
     Supports both WhatsApp and Telegram inbound formats.
+    ONLY processes "web-inbound" / "telegram-inbound" lines.
+    IGNORES "auto-reply", "outbound", "delivery" lines to prevent duplicates.
 
     Returns (sender, body, timestamp, channel) or None.
     """
@@ -106,9 +108,13 @@ def _parse_inbound_message(line):
     except (json.JSONDecodeError, TypeError):
         return None
 
+    # Skip non-inbound log lines (auto-reply, outbound, delivery, etc.)
+    module_str = str(data.get("0", ""))
+    if "auto-reply" in module_str or "outbound" in module_str or "delivery" in module_str:
+        return None
+
     # --- WhatsApp inbound: module=web-inbound, field "2"="inbound message" ---
-    if data.get("2") == "inbound message":
-        module_str = data.get("0", "")
+    if data.get("2") == "inbound message" and "web-inbound" in module_str:
         payload = data.get("1", {})
         if isinstance(payload, dict) and payload.get("body"):
             sender = payload.get("from", "")
@@ -117,9 +123,8 @@ def _parse_inbound_message(line):
             if sender and body:
                 return (sender, body, timestamp, "whatsapp")
 
-    # --- Telegram inbound: subsystem contains "telegram", "1" contains message text ---
-    subsystem = data.get("0", "")
-    if "telegram" in subsystem and "inbound" in subsystem:
+    # --- Telegram inbound ---
+    if "telegram" in module_str and "inbound" in module_str:
         payload = data.get("1", {})
         if isinstance(payload, dict) and payload.get("body"):
             sender = str(payload.get("from", ""))
@@ -127,20 +132,6 @@ def _parse_inbound_message(line):
             timestamp = payload.get("timestamp", 0)
             if sender and body:
                 return (sender, body, timestamp, "telegram")
-
-    # --- Fallback: try to detect any inbound message with body field ---
-    if data.get("2") == "inbound message":
-        payload = data.get("1", {})
-        if isinstance(payload, dict) and payload.get("body"):
-            sender = str(payload.get("from", ""))
-            body = payload.get("body", "")
-            timestamp = payload.get("timestamp", 0)
-            # Detect channel from subsystem
-            chan = "whatsapp"
-            if "telegram" in data.get("0", ""):
-                chan = "telegram"
-            if sender and body:
-                return (sender, body, timestamp, chan)
 
     return None
 
